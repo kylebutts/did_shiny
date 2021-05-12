@@ -17,7 +17,7 @@ ui <- fluidPage(
 	fluidRow(
 		column(10, offset = 1,
 			   h1("Data Generating Process"),
-			   plotOutput("did")
+			   plotOutput("dgp")
 		)
 	),
 	fluidRow(
@@ -200,17 +200,17 @@ server <- function(input, output, session) {
 			list(
 				sliderInput("te3", "Treatment Effect:", 0, min = -10, max = 10),
 				sliderInput("te_m3", "Treatment Effect Slope:", value = 0, min = -1, max = 1, step = 0.05),
-				sliderInput("g3", "Treatment Date:", value = 2004, min = input$g2, max = 2019, step = 1, sep = "")
+				sliderInput("g3", "Treatment Date:", value = 2016, min = input$g2, max = 2019, step = 1, sep = "")
 			)
 		}
 	})
 	
 	
 	
-	output$did <- renderPlot({
+	output$dgp <- renderPlot({
 		df <- df()
 		
-		df_avg <- df %>% group_by(group, year) %>% summarize(dep_var = mean(dep_var))
+		df_avg <- df %>% group_by(group, year) %>% summarize(dep_var = mean(dep_var), .groups = 'drop')
 		
 		max_y <- max(df_avg$dep_var)
 		
@@ -218,6 +218,7 @@ server <- function(input, output, session) {
 			geom_line(data = df_avg, mapping = aes(y = dep_var, x = year, color = group), size = 1.5) +
 			geom_vline(xintercept = input$g1 - 0.5, linetype = "dashed") + 
 			geom_vline(xintercept = input$g2 - 0.5, linetype = "dashed") +
+			{if(input$is_treated3) geom_vline(xintercept = input$g3 - 0.5, linetype = "dashed")} +
 			theme_kyle(base_size = 24) +
 			theme(legend.position = "bottom") +
 			labs(y = "Outcome", x = "Year", color = "Treatment Cohort") + 
@@ -226,7 +227,9 @@ server <- function(input, output, session) {
 			geom_label(data = data.frame(x = input$g1 - 0.4, y = max_y + 0.5, label = "◀ Treatment Starts"), label.size=NA,
 					   mapping = aes(x = x, y = y, label = label), size = 4.23, hjust = 0L, fontface = 2, inherit.aes = FALSE) +
 			geom_label(data = data.frame(x = input$g2 - 0.4, y = max_y + 0.75, label = "◀ Treatment Starts"), label.size=NA,
-					   mapping = aes(x = x, y = y, label = label), size = 4.23, hjust = 0L, fontface = 2, inherit.aes = FALSE)
+					   mapping = aes(x = x, y = y, label = label), size = 4.23, hjust = 0L, fontface = 2, inherit.aes = FALSE) +
+			{if(input$is_treated3) geom_label(data = data.frame(x = input$g3 - 0.4, y = max_y + 0.75, label = "◀ Treatment Starts"), label.size=NA,
+											  mapping = aes(x = x, y = y, label = label), size = 4.23, hjust = 0L, fontface = 2, inherit.aes = FALSE)}
 	}, res = 96)
 	
 	did_estimates <- eventReactive(input$estimate, { 
