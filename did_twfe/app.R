@@ -103,11 +103,11 @@ server <- function(input, output, session) {
 					group == "Group 3" ~ g3,
 				)
 			) %>% 
-			expand_grid(year = 1995:2025) %>%
+			expand_grid(year = input$panel[1]:input$panel[2]) %>%
 			# Year FE
 			group_by(year) %>% mutate(year_fe = rnorm(length(year), 0, 1)) %>% ungroup() %>%
 			mutate(
-				treat = year >= g,
+				treat = (year >= g) & (g %in% input$panel[1]:input$panel[2]),
 				rel_year = if_else(g == 0L, Inf, as.numeric(year - g)),
 				rel_year_binned = case_when(
 					rel_year == Inf ~ Inf,
@@ -240,9 +240,15 @@ server <- function(input, output, session) {
 		
 		te_twfe <- fixest::feols(dep_var ~ treat | unit + year, data = df) %>% coefficients() %>% .[["treatTRUE"]] 
 		
-		te_did <- did::att_gt(
-			yname = "dep_var", tname = "year", idname = "unit", gname = "g", data = df
-		) %>% did::aggte(type = "simple") %>% broom::tidy() %>% pull(estimate)
+		if(input$is_treated3) {
+			te_did <- did::att_gt(
+				yname = "dep_var", tname = "year", idname = "unit", gname = "g", control_group = "notyettreated", data = df
+			) %>% did::aggte(type = "simple") %>% broom::tidy() %>% pull(estimate)
+		} else {
+			te_did <- did::att_gt(
+				yname = "dep_var", tname = "year", idname = "unit", gname = "g", data = df
+			) %>% did::aggte(type = "simple") %>% broom::tidy() %>% pull(estimate)
+		}
 		
 		tribble(
 			~Estimator, ~Effect,

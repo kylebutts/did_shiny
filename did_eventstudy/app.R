@@ -104,11 +104,11 @@ server <- function(input, output, session) {
                     group == "Group 3" ~ g3,
                 )
             ) %>% 
-            expand_grid(year = 1995:2025) %>%
+            expand_grid(year = input$panel[1]:input$panel[2]) %>%
             # Year FE
             group_by(year) %>% mutate(year_fe = rnorm(length(year), 0, 1)) %>% ungroup() %>%
             mutate(
-                treat = year >= g,
+                treat = (year >= g) & (g %in% input$panel[1]:input$panel[2]),
                 rel_year = if_else(g == 0L, Inf, as.numeric(year - g)),
                 rel_year_binned = case_when(
                     rel_year == Inf ~ Inf,
