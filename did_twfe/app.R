@@ -6,6 +6,7 @@
 ## -----------------------------------------------------------------------------
 
 library(shiny)
+library(shinyWidgets)
 library(tidyverse)
 library(fixest)
 library(did)
@@ -49,7 +50,7 @@ ui <- fluidPage(
 		),
 		column(2,
 			   h3("Presets"),
-			   radioGroupButtons(
+			   shinyWidgets::radioGroupButtons(
 			   	inputId = "btn_presets",
 			   	label = "",
 			   	choices = c(
