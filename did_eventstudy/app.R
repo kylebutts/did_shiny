@@ -14,7 +14,7 @@ library(did)
 source("https://raw.githubusercontent.com/kylebutts/templates/master/ggplot_theme/theme_kyle.R")
 
 ui <- fluidPage(
-    theme = bslib::bs_theme(bootswatch = "united"),
+    theme = bslib::bs_theme(bootswatch = "flatly"),
     fluidRow(
         column(10, offset = 1,
             h1("Data Generating Process"),
