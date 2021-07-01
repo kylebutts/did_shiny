@@ -10,6 +10,7 @@ library(shinyWidgets)
 library(tidyverse)
 library(fixest)
 library(did)
+library(did2s)
 
 source("https://raw.githubusercontent.com/kylebutts/templates/master/ggplot_theme/theme_kyle.R")
 
@@ -236,8 +237,7 @@ server <- function(input, output, session) {
     })
     
     # Change treatment year
-    observeEvent(
-        input$g1 | input$g2 |input$g3, {
+    observeEvent(input$g1 | input$g2 |input$g3, {
             if(input$is_treated3) {
                 updateSliderInput(inputId = "g1", min = input$panel[1] + 2, max = input$g2 - 2)
                 updateSliderInput(inputId = "g2", min = input$g1 + 2, max = input$panel[2] - 4)
@@ -297,12 +297,25 @@ server <- function(input, output, session) {
             ),
             fluidRow(hr(style="margin-bottom: 40px;")),
             fluidRow(
-                column(6, offset = 3,
+                column(6,
                        h1("C&S Event Study"),
-                       p("This runs the R `did' program to estimate event-study parameters following Callaway and Sant'Anna"),
+                       p("This runs the R `did` program to estimate event-study parameters following Callaway and Sant'Anna"),
                        plotOutput("es_cs", height="600px")
+                ),
+                column(6,
+                       h1("Gardner Event Study"),
+                       p("This runs the R `did2s` program to estimate event-study parameters following Gardner"),
+                       plotOutput("es_gardner", height="600px")
                 )
-            ))
+            ),
+            fluidRow(
+                column(6, offset = 3,
+                       h1("S&A Event Study"),
+                       p("This runs the sunab program from `fixest` to estimate event-study parameters following Sun and Abraham"),
+                       plotOutput("es_sa", height="600px")
+                )
+            )
+            )
         })
     })
     
@@ -312,7 +325,7 @@ server <- function(input, output, session) {
         
         te_true <- get_true_effects(df)
         
-        formula <- as.formula(glue::glue("dep_var ~ i(rel_year_binned, drop=c(-1, Inf)) | unit + year"))
+        formula <- as.formula(glue::glue("dep_var ~ i(rel_year_binned, ref=c(-1, Inf)) | unit + year"))
         
         mod <- fixest::feols(formula, data = df)
         
@@ -341,7 +354,7 @@ server <- function(input, output, session) {
         
         min_rel_year <- min(df$rel_year, na.rm=TRUE)
         
-        formula <- as.formula(glue::glue("dep_var ~ i(rel_year, drop=c(-1, {min_rel_year}, Inf)) | unit + year"))
+        formula <- as.formula(glue::glue("dep_var ~ i(rel_year, ref=c(-1, {min_rel_year}, Inf)) | unit + year"))
         
         mod <- fixest::feols(formula, data = df)
         
@@ -397,11 +410,73 @@ server <- function(input, output, session) {
     output$es_cs <- renderPlot({
         es_cs()
     })
+    
+    es_gardner <- eventReactive(input$estimate, {
+        df <- df()
+        
+        te_true <- get_true_effects(df)
+        
+        
+        mod <- did2s::did2s(
+            data = df, 
+            yname = "dep_var",
+            first_stage_formula = ~ i(unit) + i(state),
+            treat_formula = ~ i(rel_year),
+            treat_var = "treat",
+            cluster_var = "state",
+            n_bootstraps = 10
+        )
+        
+        es <- broom::tidy(mod) %>%
+            filter(str_detect(term, "rel_year::")) %>% 
+            rename(rel_year = term, se = std.error) %>%
+            mutate(
+                rel_year = as.numeric(str_remove(rel_year, "rel_year::")),
+                ci_lower = estimate - 1.96 * se,
+                ci_upper = estimate + 1.96 * se
+            ) %>%
+            filter(rel_year <= 5 & rel_year >= -5)
+        
+        make_es_plot(es, te_true, "Gardner")
+    })
+    
+    output$es_gardner <- renderPlot({
+        es_gardner()
+    })
+    
+    es_sa <- eventReactive(input$estimate, {
+        df <- df()
+        
+        te_true <- get_true_effects(df)
+        
+        min_rel_year <- min(df$rel_year, na.rm=TRUE)
+        
+        formula <- as.formula(glue::glue("dep_var ~ sunab(g, year) | unit + year"))
+        
+        mod <- fixest::feols(formula, data = df)
+        
+        es <- broom::tidy(mod) %>%
+            filter(str_detect(term, "year::")) %>% 
+            select(rel_year = term, estimate, se = std.error) %>%
+            mutate(
+                rel_year = as.numeric(str_remove(rel_year, "year::")),
+                ci_lower = estimate - 1.96 * se,
+                ci_upper = estimate + 1.96 * se
+            ) %>%
+            filter(rel_year <= 5 & rel_year >= -5) %>%
+            bind_rows(tibble(rel_year = -1, estimate = 0, se = 0, ci_lower = 0, ci_upper = 0))
+        
+        make_es_plot(es, te_true, "TWFE Event-Study")
+    })
+    
+    output$es_sa <- renderPlot({
+        es_sa()
+    })
 }
 
 # Run the application 
 # For Testing
-# input <- list(g1 = 2004L, g2 = 2012L, te1 = 2.0, te2 = 2.0, te_m1=1, te_m2=0.5)
+# input <- list(g1 = 2004L, g2 = 2012L, te1 = 2.0, te2 = 2.0, te_m1=1, te_m2=0.5, panel = c(2000, 2020))
 
 shinyApp(ui = ui, server = server)
 
